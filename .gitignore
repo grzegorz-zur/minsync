@@ -1,2 +1,5 @@
 minsync
 *.swp
+src
+dst
+copy

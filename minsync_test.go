@@ -30,7 +30,7 @@ func TestSync(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer os.RemoveAll(dir)
-		err = Sync(src, dst)
+		_, _, err = Sync(src, dst)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,7 +52,7 @@ func BenchmarkSync(b *testing.B) {
 		}
 		defer os.RemoveAll(dir)
 		b.StartTimer()
-		err = Sync(src, dst)
+		_, _, err = Sync(src, dst)
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)
