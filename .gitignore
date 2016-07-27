@@ -1,5 +1,7 @@
 minsync
+minsync.test
 *.swp
+*.prof
 src
 dst
 copy

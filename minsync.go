@@ -1,9 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
 	"time"
 )
 
@@ -14,12 +16,25 @@ const (
 )
 
 func main() {
-	if len(os.Args) != 3 {
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profiling data")
+	flag.Parse()
+
+	if *cpuprofile != "" {
+		cpu, err := os.Create(*cpuprofile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, err.Error())
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(cpu)
+		defer pprof.StopCPUProfile()
+	}
+
+	if flag.NArg() != 2 {
 		fmt.Fprintf(os.Stderr, "%s source destination", os.Args[0])
 		os.Exit(1)
 	}
-	src := os.Args[1]
-	dst := os.Args[2]
+	src := flag.Arg(0)
+	dst := flag.Arg(1)
 
 	start := time.Now()
 	reads, writes, err := Sync(src, dst)
@@ -34,7 +49,7 @@ func main() {
 	if reads > 0 {
 		ratio = float64(writes) / float64(reads) * 100
 	}
-	fmt.Printf("reads\t%d\nwrites\t%d\nratio\t%3.2f%\ntime\t%v\n", reads, writes, ratio, duration)
+	fmt.Printf("reads\t%d\nwrites\t%d\nratio\t%3.2f%%\ntime\t%v\n", reads, writes, ratio, duration)
 }
 
 func Sync(src, dst string) (reads, writes int, err error) {

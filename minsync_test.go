@@ -46,7 +46,7 @@ func TestSync(t *testing.T) {
 
 func BenchmarkSync(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		dir, src, dst, err := files(67*KB, 67*KB, 0.1)
+		dir, src, dst, err := files(128*MB, 128*MB, 0.1)
 		if err != nil {
 			b.Fatal(err)
 		}
