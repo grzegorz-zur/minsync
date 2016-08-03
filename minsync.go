@@ -10,10 +10,17 @@ import (
 )
 
 const (
-	KB    = 1024
-	MB    = KB * 1024
-	BLOCK = 4 * KB
+	KB          = 1024
+	MB          = KB * 1024
+	BLOCK_SIZE  = 4 * KB
+	BUFFER_SIZE = 1024
 )
+
+type Reading struct {
+	Data   []byte
+	Offset int64
+	Error  error
+}
 
 func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profiling data")
@@ -53,11 +60,11 @@ func main() {
 }
 
 func Sync(src, dst string) (reads, writes int, err error) {
-	fs, err := os.Open(src)
-	if err != nil {
-		return
-	}
-	defer fs.Close()
+
+	readings := make(chan Reading, BUFFER_SIZE)
+	stop, clean := Reader(src, readings)
+	defer func() { <-clean }()
+	defer close(stop)
 
 	fd, err := os.OpenFile(dst, os.O_RDWR, 0)
 	if err != nil {
@@ -66,41 +73,75 @@ func Sync(src, dst string) (reads, writes int, err error) {
 	defer fd.Close()
 	defer fd.Sync()
 
-	bs := make([]byte, BLOCK)
-	bd := make([]byte, BLOCK)
-	offset := int64(0)
+	bd := make([]byte, BLOCK_SIZE)
 
 	for {
-		ns, errs := fs.Read(bs)
+		reading := <-readings
 		nd, errd := fd.Read(bd)
 		reads++
 
-		if !Compare(bs[:ns], bd[:nd]) {
-			_, err = fd.WriteAt(bs[:ns], offset)
+		if !Compare(reading.Data, bd[:nd]) {
+			_, err = fd.WriteAt(reading.Data, reading.Offset)
 			writes++
 			if err != nil {
 				return
 			}
 		}
-		offset += int64(ns)
 
 		switch {
-		case errs == io.EOF:
-			err = fd.Truncate(offset)
+		case reading.Error == io.EOF:
+			err = fd.Truncate(reading.Offset)
 			if err != nil {
 				return
 			}
 			return
 		case errd == io.EOF:
 			continue
-		case errs != nil:
-			err = errs
+		case reading.Error != nil:
+			err = reading.Error
 			return
 		case errd != nil:
-			err = errs
+			err = errd
 			return
 		}
 	}
+}
+
+func Reader(name string, readings chan Reading) (stop, clean chan struct{}) {
+
+	stop = make(chan struct{})
+	clean = make(chan struct{})
+
+	go func() {
+		defer close(clean)
+		defer close(readings)
+
+		file, err := os.Open(name)
+		if err != nil {
+			readings <- Reading{nil, 0, err}
+			return
+		}
+		defer file.Close()
+
+		offset := int64(0)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				data := make([]byte, BLOCK_SIZE)
+				n, err := file.Read(data)
+				readings <- Reading{data[:n], offset, err}
+				offset += int64(n)
+				if err == io.EOF {
+					return
+				}
+			}
+		}
+
+	}()
+
+	return
 }
 
 func Compare(b1, b2 []byte) bool {

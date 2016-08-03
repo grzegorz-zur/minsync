@@ -26,6 +26,7 @@ func TestSync(t *testing.T) {
 	}
 	for _, c := range cases {
 		dir, src, dst, err := files(c.size1, c.size2, c.changes)
+		t.Log(dir, c)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -61,7 +62,7 @@ func BenchmarkSync(b *testing.B) {
 }
 
 func files(size1, size2 int, changes float32) (string, string, string, error) {
-	temp, err := ioutil.TempDir("", "async")
+	temp, err := ioutil.TempDir("", "minsync_")
 	if err != nil {
 		return "", "", "", err
 	}
@@ -81,7 +82,7 @@ func files(size1, size2 int, changes float32) (string, string, string, error) {
 		data = data[:size2]
 	}
 
-	count := int(changes * float32(len(data)) / float32(BLOCK))
+	count := int(changes * float32(len(data)) / float32(BLOCK_SIZE))
 	for i := 0; i < count; i++ {
 		index := rand.Intn(len(data))
 		data[index] = byte(-data[index])
@@ -119,8 +120,8 @@ func compareFiles(n1, n2 string) (bool, error) {
 }
 
 func compareContents(r1, r2 io.Reader) (bool, error) {
-	b1 := make([]byte, BLOCK)
-	b2 := make([]byte, BLOCK)
+	b1 := make([]byte, BLOCK_SIZE)
+	b2 := make([]byte, BLOCK_SIZE)
 	for {
 		n1, err1 := r1.Read(b1)
 		n2, err2 := r2.Read(b2)
