@@ -61,10 +61,15 @@ func main() {
 
 func Sync(src, dst string) (reads, writes int, err error) {
 
-	readings := make(chan Reading, BUFFER_SIZE)
-	stop, clean := Reader(src, readings)
-	defer func() { <-clean }()
-	defer close(stop)
+	srs := make(chan Reading, BUFFER_SIZE)
+	ss, sc := Reader(src, srs)
+	defer func() { <-sc }()
+	defer close(ss)
+
+	drs := make(chan Reading, BUFFER_SIZE)
+	ds, dc := Reader(dst, drs)
+	defer func() { <-dc }()
+	defer close(ds)
 
 	fd, err := os.OpenFile(dst, os.O_RDWR, 0)
 	if err != nil {
@@ -73,15 +78,13 @@ func Sync(src, dst string) (reads, writes int, err error) {
 	defer fd.Close()
 	defer fd.Sync()
 
-	bd := make([]byte, BLOCK_SIZE)
-
 	for {
-		reading := <-readings
-		nd, errd := fd.Read(bd)
+		sr := <-srs
+		dr := <-drs
 		reads++
 
-		if !Compare(reading.Data, bd[:nd]) {
-			_, err = fd.WriteAt(reading.Data, reading.Offset)
+		if !Compare(sr.Data, dr.Data) {
+			_, err = fd.WriteAt(sr.Data, sr.Offset)
 			writes++
 			if err != nil {
 				return
@@ -89,19 +92,16 @@ func Sync(src, dst string) (reads, writes int, err error) {
 		}
 
 		switch {
-		case reading.Error == io.EOF:
-			err = fd.Truncate(reading.Offset)
-			if err != nil {
-				return
-			}
+		case sr.Error == io.EOF:
+			err = fd.Truncate(sr.Offset)
 			return
-		case errd == io.EOF:
+		case dr.Error == io.EOF:
 			continue
-		case reading.Error != nil:
-			err = reading.Error
+		case sr.Error != nil:
+			err = sr.Error
 			return
-		case errd != nil:
-			err = errd
+		case dr.Error != nil:
+			err = dr.Error
 			return
 		}
 	}
