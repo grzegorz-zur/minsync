@@ -11,18 +11,21 @@ import (
 
 const (
 	KB          = 1024
-	MB          = KB * 1024
+	MB          = 1024 * KB
+	GB          = 1024 * MB
 	BLOCK_SIZE  = 4 * KB
-	BUFFER_SIZE = 1024
+	BUFFER_SIZE = GB / BLOCK_SIZE
 )
 
-type Reading struct {
-	Data   []byte
-	Offset int64
-	Error  error
-}
-
 func main() {
+	defer func() {
+		err := recover()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			os.Exit(3)
+		}
+	}()
+
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profiling data")
 	flag.Parse()
 
@@ -59,89 +62,103 @@ func main() {
 	fmt.Printf("reads\t%d\nwrites\t%d\nratio\t%3.2f%%\ntime\t%v\n", reads, writes, ratio, duration)
 }
 
-func Sync(src, dst string) (reads, writes int, err error) {
+type Op struct {
+	Data   []byte
+	Offset int64
+}
 
-	srs := make(chan Reading, BUFFER_SIZE)
-	ss, sc := Reader(src, srs)
-	defer func() { <-sc }()
-	defer close(ss)
+func Sync(src, dst string) (reads, writes int64, err error) {
 
-	drs := make(chan Reading, BUFFER_SIZE)
-	ds, dc := Reader(dst, drs)
-	defer func() { <-dc }()
-	defer close(ds)
-
-	fd, err := os.OpenFile(dst, os.O_RDWR, 0)
+	sf, err := os.Open(src)
 	if err != nil {
 		return
 	}
-	defer fd.Close()
-	defer fd.Sync()
+	defer sf.Close()
 
-	for {
-		sr := <-srs
-		dr := <-drs
-		reads++
+	df, err := os.OpenFile(dst, os.O_RDWR, 0)
+	if err != nil {
+		return
+	}
+	defer df.Close()
 
-		if !Compare(sr.Data, dr.Data) {
-			_, err = fd.WriteAt(sr.Data, sr.Offset)
+	si, err := sf.Stat()
+	if err != nil {
+		return
+	}
+	size := si.Size()
+	blocks := size / BLOCK_SIZE
+	if size%BLOCK_SIZE > 0 {
+		blocks += 1
+	}
+
+	err = df.Truncate(size)
+	if err != nil {
+		return
+	}
+
+	err = df.Sync()
+	if err != nil {
+		return
+	}
+
+	sr := make(chan Op, BUFFER_SIZE)
+	dr := make(chan Op, BUFFER_SIZE)
+
+	sw := make(chan Op, BUFFER_SIZE)
+	dw := make(chan Op, BUFFER_SIZE)
+
+	go ReadWrite(sf, sr, sw)
+	go ReadWrite(df, dr, dw)
+
+	for reads = int64(0); reads < blocks; reads++ {
+		s, d := <-sr, <-dr
+		if !Compare(s.Data, d.Data) {
+			dw <- Op{s.Data, s.Offset}
 			writes++
-			if err != nil {
-				return
-			}
-		}
-
-		switch {
-		case sr.Error == io.EOF:
-			err = fd.Truncate(sr.Offset)
-			return
-		case dr.Error == io.EOF:
-			continue
-		case sr.Error != nil:
-			err = sr.Error
-			return
-		case dr.Error != nil:
-			err = dr.Error
-			return
 		}
 	}
-}
 
-func Reader(name string, readings chan Reading) (stop, clean chan struct{}) {
+	close(sw)
+	close(dw)
 
-	stop = make(chan struct{})
-	clean = make(chan struct{})
-
-	go func() {
-		defer close(clean)
-		defer close(readings)
-
-		file, err := os.Open(name)
-		if err != nil {
-			readings <- Reading{nil, 0, err}
-			return
-		}
-		defer file.Close()
-
-		offset := int64(0)
-		for {
-			select {
-			case <-stop:
-				return
-			default:
-				data := make([]byte, BLOCK_SIZE)
-				n, err := file.Read(data)
-				readings <- Reading{data[:n], offset, err}
-				offset += int64(n)
-				if err == io.EOF {
-					return
-				}
-			}
-		}
-
-	}()
+	<-dr
+	<-sr
 
 	return
+
+}
+
+func ReadWrite(file *os.File, read, write chan Op) {
+
+	defer close(read)
+
+	for offset := int64(0); ; {
+		select {
+		case w, ok := <-write:
+			if !ok {
+				return
+			}
+			_, err := file.WriteAt(w.Data, w.Offset)
+			if err != nil {
+				panic(err)
+			}
+			err = file.Sync()
+			if err != nil {
+				panic(err)
+			}
+		default:
+			data := make([]byte, BLOCK_SIZE)
+			n, err := file.Read(data)
+			if err != nil && err != io.EOF {
+				panic(err)
+			}
+			if n != 0 {
+				read <- Op{data[:n], offset}
+				offset += int64(n)
+			}
+		}
+	}
+
 }
 
 func Compare(b1, b2 []byte) bool {

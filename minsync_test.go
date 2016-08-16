@@ -10,20 +10,50 @@ import (
 )
 
 func TestSync(t *testing.T) {
+
 	cases := []struct {
 		size1   int
 		size2   int
 		changes float32
 	}{
+		{0, 0, 0},
+
+		{1 * KB, 1 * KB, 0},
+		{1 * KB, 1 * KB, 0.5},
+		{1 * KB, 1 * KB, 1},
+		{0 * KB, 1 * KB, 0},
+		{0 * KB, 1 * KB, 0.5},
+		{0 * KB, 1 * KB, 1},
+		{1 * KB, 0 * KB, 0},
+		{0 * KB, 1 * KB, 0.5},
+		{1 * KB, 0 * KB, 1},
+
+		{4 * KB, 4 * KB, 0},
+		{4 * KB, 4 * KB, 0.5},
+		{4 * KB, 4 * KB, 1},
+		{0 * KB, 4 * KB, 0},
+		{0 * KB, 4 * KB, 0.5},
+		{0 * KB, 4 * KB, 1},
+		{4 * KB, 0 * KB, 0},
+		{4 * KB, 0 * KB, 0.5},
+		{4 * KB, 0 * KB, 1},
+
 		{1 * MB, 1 * MB, 0.1},
 		{1 * MB, 2 * MB, 0.1},
 		{2 * MB, 1 * MB, 0.1},
 		{1 * MB, 1 * MB, 0.5},
 		{1 * MB, 2 * MB, 0.5},
 		{2 * MB, 1 * MB, 0.5},
+		{1 * MB, 1 * MB, 1.0},
+		{1 * MB, 2 * MB, 1.0},
+		{2 * MB, 1 * MB, 1.0},
+
 		{MB, MB + KB, 0.5},
 		{MB + KB, MB, 0.5},
+		{MB, MB + KB, 1.0},
+		{MB + KB, MB, 1.0},
 	}
+
 	for _, c := range cases {
 		dir, src, dst, err := files(c.size1, c.size2, c.changes)
 		t.Log(dir, c)
@@ -144,6 +174,7 @@ func compareContents(r1, r2 io.Reader) (bool, error) {
 }
 
 func TestCompare(t *testing.T) {
+
 	cases := []struct {
 		a, b string
 	}{
@@ -164,4 +195,5 @@ func TestCompare(t *testing.T) {
 			t.Errorf("%t != %t", r1, e)
 		}
 	}
+
 }
