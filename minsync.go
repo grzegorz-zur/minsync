@@ -96,11 +96,6 @@ func Sync(src, dst string) (reads, writes int64, err error) {
 		return
 	}
 
-	err = df.Sync()
-	if err != nil {
-		return
-	}
-
 	sr := make(chan Op, BUFFER_SIZE)
 	dr := make(chan Op, BUFFER_SIZE)
 
@@ -124,6 +119,11 @@ func Sync(src, dst string) (reads, writes int64, err error) {
 	<-dr
 	<-sr
 
+	err = df.Sync()
+	if err != nil {
+		panic(err)
+	}
+
 	return
 
 }
@@ -139,10 +139,6 @@ func ReadWrite(file *os.File, read, write chan Op) {
 				return
 			}
 			_, err := file.WriteAt(w.Data, w.Offset)
-			if err != nil {
-				panic(err)
-			}
-			err = file.Sync()
 			if err != nil {
 				panic(err)
 			}
