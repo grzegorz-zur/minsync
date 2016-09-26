@@ -6,15 +6,6 @@ import (
 	"io"
 	"os"
 	"runtime/pprof"
-	"time"
-)
-
-const (
-	KB          = 1024
-	MB          = 1024 * KB
-	GB          = 1024 * MB
-	BLOCK_SIZE  = 4 * KB
-	BUFFER_SIZE = GB / BLOCK_SIZE
 )
 
 func main() {
@@ -46,20 +37,13 @@ func main() {
 	src := flag.Arg(0)
 	dst := flag.Arg(1)
 
-	start := time.Now()
-	reads, writes, err := Sync(src, dst)
-	duration := time.Since(start)
+	err := Sync(src, dst)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err.Error())
 		os.Exit(2)
 	}
 
-	ratio := 0.0
-	if reads > 0 {
-		ratio = float64(writes) / float64(reads) * 100
-	}
-	fmt.Printf("reads\t%d\nwrites\t%d\nratio\t%3.2f%%\ntime\t%v\n", reads, writes, ratio, duration)
 }
 
 type Op struct {
@@ -67,7 +51,7 @@ type Op struct {
 	Offset int64
 }
 
-func Sync(src, dst string) (reads, writes int64, err error) {
+func Sync(src, dst string) (err error) {
 
 	sf, err := os.Open(src)
 	if err != nil {
@@ -105,12 +89,17 @@ func Sync(src, dst string) (reads, writes int64, err error) {
 	go ReadWrite(sf, sr, sw)
 	go ReadWrite(df, dr, dw)
 
-	for reads = int64(0); reads < blocks; reads++ {
+	progress := Start(size, sr, dr, dw)
+	defer progress.End()
+	writes := int64(0)
+
+	for reads := int64(1); reads <= blocks; reads++ {
 		s, d := <-sr, <-dr
 		if !Compare(s.Data, d.Data) {
 			dw <- Op{s.Data, s.Offset}
 			writes++
 		}
+		progress.Step(reads*BLOCK_SIZE, writes*BLOCK_SIZE)
 	}
 
 	close(sw)
