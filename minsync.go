@@ -110,7 +110,7 @@ func Sync(src, dst string) (err error) {
 
 	err = df.Sync()
 	if err != nil {
-		panic(err)
+		return
 	}
 
 	return
