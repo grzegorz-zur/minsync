@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -9,12 +8,12 @@ import (
 
 func main() {
 
-	if flag.NArg() != 2 {
+	if len(os.Args) != 3 {
 		fmt.Fprintf(os.Stderr, "%s source destination", os.Args[0])
 		os.Exit(1)
 	}
-	src := flag.Arg(0)
-	dst := flag.Arg(1)
+	src := os.Args[1]
+	dst := os.Args[2]
 
 	err := Sync(src, dst)
 
@@ -77,20 +76,24 @@ func Sync(src, dst string) error {
 loop:
 	for reads := int64(1); reads <= blocks; reads++ {
 		var s, d Op
+
 		select {
 		case s = <-sr:
 		case err = <-se:
 			break loop
 		}
+
 		select {
 		case d = <-dr:
 		case err = <-de:
 			break loop
 		}
+
 		if !Compare(s.Data, d.Data) {
 			dw <- Op{s.Data, s.Offset}
 			writes++
 		}
+
 		progress.Step(reads*BLOCK_SIZE, writes*BLOCK_SIZE)
 	}
 
