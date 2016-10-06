@@ -9,14 +9,6 @@ import (
 )
 
 func main() {
-	defer func() {
-		err := recover()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			os.Exit(3)
-		}
-	}()
-
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profiling data")
 	flag.Parse()
 
@@ -51,23 +43,23 @@ type Op struct {
 	Offset int64
 }
 
-func Sync(src, dst string) (err error) {
+func Sync(src, dst string) error {
 
 	sf, err := os.Open(src)
 	if err != nil {
-		return
+		return err
 	}
 	defer sf.Close()
 
 	df, err := os.OpenFile(dst, os.O_RDWR, 0)
 	if err != nil {
-		return
+		return err
 	}
 	defer df.Close()
 
 	si, err := sf.Stat()
 	if err != nil {
-		return
+		return err
 	}
 	size := si.Size()
 	blocks := size / BLOCK_SIZE
@@ -77,24 +69,37 @@ func Sync(src, dst string) (err error) {
 
 	err = df.Truncate(size)
 	if err != nil {
-		return
+		return err
 	}
 
 	sr := make(chan Op, BUFFER_SIZE)
-	dr := make(chan Op, BUFFER_SIZE)
-
 	sw := make(chan Op, BUFFER_SIZE)
-	dw := make(chan Op, BUFFER_SIZE)
+	se := make(chan error)
 
-	go ReadWrite(sf, sr, sw)
-	go ReadWrite(df, dr, dw)
+	dr := make(chan Op, BUFFER_SIZE)
+	dw := make(chan Op, BUFFER_SIZE)
+	de := make(chan error)
+
+	go ReadWrite(sf, sr, sw, se)
+	go ReadWrite(df, dr, dw, de)
 
 	progress := Start(size, sr, dr, dw)
 	defer progress.End()
 	writes := int64(0)
 
+loop:
 	for reads := int64(1); reads <= blocks; reads++ {
-		s, d := <-sr, <-dr
+		var s, d Op
+		select {
+		case s = <-sr:
+		case err = <-se:
+			break loop
+		}
+		select {
+		case d = <-dr:
+		case err = <-de:
+			break loop
+		}
 		if !Compare(s.Data, d.Data) {
 			dw <- Op{s.Data, s.Offset}
 			writes++
@@ -108,16 +113,20 @@ func Sync(src, dst string) (err error) {
 	<-dr
 	<-sr
 
-	err = df.Sync()
 	if err != nil {
-		return
+		return err
 	}
 
-	return
+	err = df.Sync()
+	if err != nil {
+		return err
+	}
+
+	return nil
 
 }
 
-func ReadWrite(file *os.File, read, write chan Op) {
+func ReadWrite(file *os.File, read, write chan Op, errs chan error) {
 
 	defer close(read)
 
@@ -129,13 +138,15 @@ func ReadWrite(file *os.File, read, write chan Op) {
 			}
 			_, err := file.WriteAt(w.Data, w.Offset)
 			if err != nil {
-				panic(err)
+				errs <- err
+				return
 			}
 		default:
 			data := make([]byte, BLOCK_SIZE)
 			n, err := file.Read(data)
 			if err != nil && err != io.EOF {
-				panic(err)
+				errs <- err
+				return
 			}
 			if n != 0 {
 				read <- Op{data[:n], offset}
