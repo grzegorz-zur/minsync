@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
+	"sync"
 	"time"
 )
 
 type Progress struct {
+	mutex   sync.Mutex
 	output  io.Writer
 	start   time.Time
 	size    int64
@@ -35,6 +37,8 @@ func (p *Progress) Start(size int64, sr, dr, dw chan Op) {
 }
 
 func (p *Progress) Step(read, written int64) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
 	p.read = read
 	p.written = written
 }
@@ -82,6 +86,8 @@ func (p *Progress) Estimated() time.Duration {
 }
 
 func (p *Progress) Print() {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
 	fmt.Fprintf(p.output, "\x1B[2J\x1B[H")
 	fmt.Fprintf(p.output, "file size              %s\n", Size(p.size))
 	fmt.Fprintf(p.output, "\n")
@@ -92,9 +98,9 @@ func (p *Progress) Print() {
 	fmt.Fprintf(p.output, "\n")
 	fmt.Fprintf(p.output, "changed blocks            %s\n", Percentage(p.Changes()))
 	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "input read buffer         %s\n", Percentage(100 * len(p.sr)/cap(p.sr)))
-	fmt.Fprintf(p.output, "output read buffer        %s\n", Percentage(100 * len(p.dr)/cap(p.dr)))
-	fmt.Fprintf(p.output, "output write buffer       %s\n", Percentage(100 * len(p.dw)/cap(p.dw)))
+	fmt.Fprintf(p.output, "input read buffer         %s\n", Percentage(100*len(p.sr)/cap(p.sr)))
+	fmt.Fprintf(p.output, "output read buffer        %s\n", Percentage(100*len(p.dr)/cap(p.dr)))
+	fmt.Fprintf(p.output, "output write buffer       %s\n", Percentage(100*len(p.dw)/cap(p.dw)))
 	fmt.Fprintf(p.output, "\n")
 	fmt.Fprintf(p.output, "time estimated              %s\n", Duration(p.Estimated()))
 	fmt.Fprintf(p.output, "time elapsed                %s\n", Duration(time.Since(p.start)))
