@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"time"
 )
 
 type Progress struct {
+	output  io.Writer
 	start   time.Time
 	size    int64
 	read    int64
@@ -16,17 +18,20 @@ type Progress struct {
 	done    chan struct{}
 }
 
-func Start(size int64, sr, dr, dw chan Op) *Progress {
-	p := &Progress{
-		start: time.Now(),
-		size:  size,
-		sr:    sr,
-		dr:    dr,
-		dw:    dw,
-		done:  make(chan struct{}),
+func NewProgress(w io.Writer) *Progress {
+	return &Progress{
+		output: w,
+		done:   make(chan struct{}),
 	}
+}
+
+func (p *Progress) Start(size int64, sr, dr, dw chan Op) {
+	p.start = time.Now()
+	p.size = size
+	p.sr = sr
+	p.dr = dr
+	p.dw = dw
 	go p.Run()
-	return p
 }
 
 func (p *Progress) Step(read, written int64) {
@@ -77,21 +82,20 @@ func (p *Progress) Estimated() time.Duration {
 }
 
 func (p *Progress) Print() {
-	fmt.Printf("\x1B[2J")
-	fmt.Printf("\x1B[H")
-	fmt.Printf("file size\t%s\n", Size(p.size))
-	fmt.Println()
-	fmt.Printf("bytes read\t%s\n", Size(p.read))
-	fmt.Printf("bytes written\t%s\n", Size(p.written))
-	fmt.Println()
-	fmt.Printf("read speed\t%s\n", Speed(p.Speed()))
-	fmt.Println()
-	fmt.Printf("changed blocks\t%s\n", Percentage(p.Changes()))
-	fmt.Println()
-	fmt.Printf("input read buffer\t%s\n", Percentage(len(p.sr)/cap(p.sr)))
-	fmt.Printf("output read buffer\t%s\n", Percentage(len(p.dr)/cap(p.dr)))
-	fmt.Printf("output write buffer\t%s\n", Percentage(len(p.dw)/cap(p.dw)))
-	fmt.Println()
-	fmt.Printf("time estimated\t%s\n", Duration(p.Estimated()))
-	fmt.Printf("time elapsed\t%s\n", Duration(time.Since(p.start)))
+	fmt.Fprintf(p.output, "\x1B[2J\x1B[H")
+	fmt.Fprintf(p.output, "file size              %s\n", Size(p.size))
+	fmt.Fprintf(p.output, "\n")
+	fmt.Fprintf(p.output, "bytes read             %s\n", Size(p.read))
+	fmt.Fprintf(p.output, "bytes written          %s\n", Size(p.written))
+	fmt.Fprintf(p.output, "\n")
+	fmt.Fprintf(p.output, "read speed             %s\n", Speed(p.Speed()))
+	fmt.Fprintf(p.output, "\n")
+	fmt.Fprintf(p.output, "changed blocks            %s\n", Percentage(p.Changes()))
+	fmt.Fprintf(p.output, "\n")
+	fmt.Fprintf(p.output, "input read buffer         %s\n", Percentage(100 * len(p.sr)/cap(p.sr)))
+	fmt.Fprintf(p.output, "output read buffer        %s\n", Percentage(100 * len(p.dr)/cap(p.dr)))
+	fmt.Fprintf(p.output, "output write buffer       %s\n", Percentage(100 * len(p.dw)/cap(p.dw)))
+	fmt.Fprintf(p.output, "\n")
+	fmt.Fprintf(p.output, "time estimated              %s\n", Duration(p.Estimated()))
+	fmt.Fprintf(p.output, "time elapsed                %s\n", Duration(time.Since(p.start)))
 }

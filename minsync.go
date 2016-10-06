@@ -15,7 +15,8 @@ func main() {
 	src := os.Args[1]
 	dst := os.Args[2]
 
-	err := Sync(src, dst)
+	p := NewProgress(os.Stdout)
+	err := Sync(src, dst, p)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err.Error())
@@ -29,7 +30,7 @@ type Op struct {
 	Offset int64
 }
 
-func Sync(src, dst string) error {
+func Sync(src, dst string, p *Progress) error {
 
 	sf, err := os.Open(src)
 	if err != nil {
@@ -69,8 +70,8 @@ func Sync(src, dst string) error {
 	go ReadWrite(sf, sr, sw, se)
 	go ReadWrite(df, dr, dw, de)
 
-	progress := Start(size, sr, dr, dw)
-	defer progress.End()
+	defer p.End()
+	p.Start(size, sr, dr, dw)
 	writes := int64(0)
 
 loop:
@@ -94,7 +95,7 @@ loop:
 			writes++
 		}
 
-		progress.Step(reads*BLOCK_SIZE, writes*BLOCK_SIZE)
+		p.Step(reads*BLOCK_SIZE, writes*BLOCK_SIZE)
 	}
 
 	close(sw)
