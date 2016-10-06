@@ -5,22 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime/pprof"
 )
 
 func main() {
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profiling data")
-	flag.Parse()
-
-	if *cpuprofile != "" {
-		cpu, err := os.Create(*cpuprofile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, err.Error())
-			os.Exit(1)
-		}
-		pprof.StartCPUProfile(cpu)
-		defer pprof.StopCPUProfile()
-	}
 
 	if flag.NArg() != 2 {
 		fmt.Fprintf(os.Stderr, "%s source destination", os.Args[0])
