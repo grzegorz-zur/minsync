@@ -18,6 +18,7 @@ type Progress struct {
 	dr      chan Op
 	dw      chan Op
 	done    chan struct{}
+	printed bool
 }
 
 func NewProgress(w io.Writer) *Progress {
@@ -88,7 +89,10 @@ func (p *Progress) Estimated() time.Duration {
 func (p *Progress) Print() {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
-	fmt.Fprintf(p.output, "\x1B[2J\x1B[H")
+	if p.printed {
+		fmt.Fprintf(p.output, "\x1B[15A")
+	}
+	fmt.Fprintf(p.output, "\x1B[J")
 	fmt.Fprintf(p.output, "file size              %s\n", Size(p.size))
 	fmt.Fprintf(p.output, "\n")
 	fmt.Fprintf(p.output, "bytes read             %s\n", Size(p.read))
@@ -104,4 +108,5 @@ func (p *Progress) Print() {
 	fmt.Fprintf(p.output, "\n")
 	fmt.Fprintf(p.output, "time estimated              %s\n", Duration(p.Estimated()))
 	fmt.Fprintf(p.output, "time elapsed                %s\n", Duration(time.Since(p.start)))
+	p.printed = true
 }
