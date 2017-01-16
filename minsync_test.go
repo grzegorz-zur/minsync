@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -160,7 +161,7 @@ func compareContents(r1, r2 io.Reader) (bool, error) {
 		if n1 != n2 {
 			return false, nil
 		}
-		if !Compare(b1[:n1], b2[:n2]) {
+		if bytes.Compare(b1[:n1], b2[:n2]) != 0 {
 			return false, nil
 		}
 		if err1 == io.EOF && err2 == io.EOF {
@@ -173,29 +174,4 @@ func compareContents(r1, r2 io.Reader) (bool, error) {
 			return false, err2
 		}
 	}
-}
-
-func TestCompare(t *testing.T) {
-
-	cases := []struct {
-		a, b string
-	}{
-		{"", ""},
-		{"a", "a"},
-		{"ab", "a"},
-		{"abc", "aBc"},
-	}
-
-	for _, c := range cases {
-		r1 := Compare([]byte(c.a), []byte(c.b))
-		r2 := Compare([]byte(c.b), []byte(c.a))
-		if r1 != r2 {
-			t.Errorf("%t != %t", r1, r2)
-		}
-		e := c.a == c.b
-		if r1 != e {
-			t.Errorf("%t != %t", r1, e)
-		}
-	}
-
 }

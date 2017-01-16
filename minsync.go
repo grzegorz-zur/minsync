@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -90,7 +91,7 @@ loop:
 			break loop
 		}
 
-		if !Compare(s.Data, d.Data) {
+		if bytes.Compare(s.Data, d.Data) != 0 {
 			dw <- Op{s.Data, s.Offset}
 			writes++
 		}
@@ -146,16 +147,4 @@ func ReadWrite(file *os.File, read, write chan Op, errs chan error) {
 		}
 	}
 
-}
-
-func Compare(b1, b2 []byte) bool {
-	if len(b1) != len(b2) {
-		return false
-	}
-	for i := 0; i < len(b1); i++ {
-		if b1[i] != b2[i] {
-			return false
-		}
-	}
-	return true
 }
