@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 )
 
 func main() {
@@ -102,9 +103,18 @@ loop:
 	close(sw)
 	close(dw)
 
-	<-dr
 	<-sr
+	<-dr
 
+	if err != nil {
+		return err
+	}
+
+	select {
+	case err = <-se:
+	case err = <-de:
+	default:
+	}
 	if err != nil {
 		return err
 	}
@@ -122,16 +132,30 @@ func ReadWrite(file *os.File, read, write chan Op, errs chan error) {
 
 	defer close(read)
 
+	sparse := true
+
 	for offset := int64(0); ; {
 		select {
 		case w, ok := <-write:
 			if !ok {
 				return
 			}
-			_, err := file.WriteAt(w.Data, w.Offset)
-			if err != nil {
-				errs <- err
-				return
+			if sparse && Zeros(w.Data) {
+				err := PunchHole(file, w.Offset, int64(len(w.Data)))
+				if err == syscall.EOPNOTSUPP {
+					sparse = false
+					_, err = file.WriteAt(w.Data, w.Offset)
+				}
+				if err != nil {
+					errs <- err
+					return
+				}
+			} else {
+				_, err := file.WriteAt(w.Data, w.Offset)
+				if err != nil {
+					errs <- err
+					return
+				}
 			}
 		default:
 			data := make([]byte, BLOCK_SIZE)
@@ -146,5 +170,16 @@ func ReadWrite(file *os.File, read, write chan Op, errs chan error) {
 			}
 		}
 	}
+
+}
+
+func Zeros(data []byte) bool {
+
+	for _, b := range data {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
 
 }
