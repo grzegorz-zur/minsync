@@ -92,7 +92,7 @@ loop:
 			break loop
 		}
 
-		if bytes.Compare(s.Data, d.Data) != 0 {
+		if !bytes.Equal(s.Data, d.Data) {
 			dw <- Op{s.Data, s.Offset}
 			writes++
 		}

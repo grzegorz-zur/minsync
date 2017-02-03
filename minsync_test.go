@@ -161,7 +161,7 @@ func compareContents(r1, r2 io.Reader) (bool, error) {
 		if n1 != n2 {
 			return false, nil
 		}
-		if bytes.Compare(b1[:n1], b2[:n2]) != 0 {
+		if !bytes.Equal(b1[:n1], b2[:n2]) {
 			return false, nil
 		}
 		if err1 == io.EOF && err2 == io.EOF {
