@@ -10,17 +10,15 @@ import (
 )
 
 func TestSparse(t *testing.T) {
-	dir, src, dst, err := files(1*MB, 1*MB, 0.0)
-	t.Log(dir, "sparse")
+
+	dir, src, dst, err := randomFiles(MB, MB, 1, 1)
+	t.Log(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
-
-	os.Truncate(src, 0)
-	os.Truncate(src, 1*MB)
 
 	p := NewProgress(ioutil.Discard)
+	defer t.Logf("%+v", p)
 	err = Sync(src, dst, p)
 	if err != nil {
 		t.Fatal(err)
@@ -41,4 +39,8 @@ func TestSparse(t *testing.T) {
 	if blocks > 0 {
 		t.Errorf("file is not sparse %s blocks %d", dst, blocks)
 	}
+	if !t.Failed() {
+		os.RemoveAll(dir)
+	}
+
 }

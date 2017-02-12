@@ -6,11 +6,10 @@ import (
 )
 
 const (
-	KB          = 1024
-	MB          = 1024 * KB
-	GB          = 1024 * MB
-	BLOCK_SIZE  = 4 * KB
-	BUFFER_SIZE = 128 * MB / BLOCK_SIZE
+	KB         = 1024
+	MB         = 1024 * KB
+	GB         = 1024 * MB
+	BLOCK_SIZE = 4 * KB
 )
 
 func Size(n int64) string {

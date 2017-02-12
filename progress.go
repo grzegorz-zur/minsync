@@ -14,9 +14,7 @@ type Progress struct {
 	size    int64
 	read    int64
 	written int64
-	sr      chan Op
-	dr      chan Op
-	dw      chan Op
+	zeroed  int64
 	done    chan struct{}
 	printed bool
 }
@@ -28,20 +26,28 @@ func NewProgress(w io.Writer) *Progress {
 	}
 }
 
-func (p *Progress) Start(size int64, sr, dr, dw chan Op) {
+func (p *Progress) Start(size int64) {
 	p.start = time.Now()
 	p.size = size
-	p.sr = sr
-	p.dr = dr
-	p.dw = dw
 	go p.Run()
 }
 
-func (p *Progress) Step(read, written int64) {
+func (p *Progress) Read(n int) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
-	p.read = read
-	p.written = written
+	p.read += int64(n)
+}
+
+func (p *Progress) Written(n int) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+	p.written += int64(n)
+}
+
+func (p *Progress) Zeroed(n int) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+	p.zeroed += int64(n)
 }
 
 func (p *Progress) End() {
@@ -67,7 +73,7 @@ func (p *Progress) Changes() int {
 	if p.read == 0 {
 		return 0
 	}
-	return int(100 * p.written / p.read)
+	return int(100 * (p.written + p.zeroed) / p.read)
 }
 
 func (p *Progress) Speed() int64 {
@@ -90,23 +96,20 @@ func (p *Progress) Print() {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	if p.printed {
-		fmt.Fprintf(p.output, "\x1B[15A")
+		fmt.Fprintf(p.output, "\x1B[12A")
 	}
 	fmt.Fprintf(p.output, "\x1B[J")
-	fmt.Fprintf(p.output, "file size              %s\n", Size(p.size))
+	fmt.Fprintf(p.output, "size             %s\n", Size(p.size))
 	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "bytes read             %s\n", Size(p.read))
-	fmt.Fprintf(p.output, "bytes written          %s\n", Size(p.written))
+	fmt.Fprintf(p.output, "read             %s\n", Size(p.read))
+	fmt.Fprintf(p.output, "written          %s\n", Size(p.written))
+	fmt.Fprintf(p.output, "zeroed           %s\n", Size(p.zeroed))
 	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "read speed             %s\n", Speed(p.Speed()))
+	fmt.Fprintf(p.output, "speed            %s\n", Speed(p.Speed()))
 	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "changed blocks            %s\n", Percentage(p.Changes()))
+	fmt.Fprintf(p.output, "changes             %s\n", Percentage(p.Changes()))
 	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "input read buffer         %s\n", Percentage(100*len(p.sr)/cap(p.sr)))
-	fmt.Fprintf(p.output, "output read buffer        %s\n", Percentage(100*len(p.dr)/cap(p.dr)))
-	fmt.Fprintf(p.output, "output write buffer       %s\n", Percentage(100*len(p.dw)/cap(p.dw)))
-	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "time estimated              %s\n", Duration(p.Estimated()))
-	fmt.Fprintf(p.output, "time elapsed                %s\n", Duration(time.Since(p.start)))
+	fmt.Fprintf(p.output, "time elapsed          %s\n", Duration(time.Since(p.start)))
+	fmt.Fprintf(p.output, "time left             %s\n", Duration(p.Estimated()))
 	p.printed = true
 }

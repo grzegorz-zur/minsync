@@ -2,90 +2,80 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
 	"testing"
+	"time"
 )
 
 func TestSync(t *testing.T) {
 
-	cases := []struct {
-		size1   int
-		size2   int
+	type testCase struct {
+		src     int64
+		dst     int64
+		zeros   float32
 		changes float32
-	}{
-		{0, 0, 0},
+	}
+	var cases []testCase
 
-		{1 * KB, 1 * KB, 0},
-		{1 * KB, 1 * KB, 0.5},
-		{1 * KB, 1 * KB, 1},
-		{0 * KB, 1 * KB, 0},
-		{0 * KB, 1 * KB, 0.5},
-		{0 * KB, 1 * KB, 1},
-		{1 * KB, 0 * KB, 0},
-		{0 * KB, 1 * KB, 0.5},
-		{1 * KB, 0 * KB, 1},
+	sizes := []int64{0, KB, KB + BLOCK_SIZE, MB, MB + KB, MB + BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE + 1}
+	probs := []float32{0, 0.33, 0.5, 0.66, 0.9, 1}
 
-		{4 * KB, 4 * KB, 0},
-		{4 * KB, 4 * KB, 0.5},
-		{4 * KB, 4 * KB, 1},
-		{0 * KB, 4 * KB, 0},
-		{0 * KB, 4 * KB, 0.5},
-		{0 * KB, 4 * KB, 1},
-		{4 * KB, 0 * KB, 0},
-		{4 * KB, 0 * KB, 0.5},
-		{4 * KB, 0 * KB, 1},
-
-		{1 * MB, 1 * MB, 0.1},
-		{1 * MB, 2 * MB, 0.1},
-		{2 * MB, 1 * MB, 0.1},
-		{1 * MB, 1 * MB, 0.5},
-		{1 * MB, 2 * MB, 0.5},
-		{2 * MB, 1 * MB, 0.5},
-		{1 * MB, 1 * MB, 1.0},
-		{1 * MB, 2 * MB, 1.0},
-		{2 * MB, 1 * MB, 1.0},
-
-		{MB, MB + KB, 0.5},
-		{MB + KB, MB, 0.5},
-		{MB, MB + KB, 1.0},
-		{MB + KB, MB, 1.0},
+	for _, s1 := range sizes {
+		for _, s2 := range sizes {
+			for _, z := range probs {
+				for _, c := range probs {
+					cases = append(cases, testCase{s1, s2, z, c})
+				}
+			}
+		}
 	}
 
 	for _, c := range cases {
-		dir, src, dst, err := files(c.size1, c.size2, c.changes)
-		t.Log(dir, c)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer os.RemoveAll(dir)
-		p := NewProgress(ioutil.Discard)
-		err = Sync(src, dst, p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		match, err := compareFiles(src, dst)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !match {
-			t.Errorf("%s != %s", src, dst)
-		}
+		t.Run(
+			fmt.Sprintf("case %s %s %s %s", Size(c.src), Size(c.dst),
+				Percentage(int(c.zeros*100)), Percentage(int(c.changes*100))),
+			func(t *testing.T) {
+				dir, src, dst, err := randomFiles(c.src, c.dst, c.zeros, c.changes)
+				t.Log("directory", dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p := NewProgress(ioutil.Discard)
+				defer t.Logf("%+v", p)
+				err = Sync(src, dst, p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				match, err := compareFiles(src, dst)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !match {
+					t.Errorf("files differ")
+				}
+				if !t.Failed() {
+					os.RemoveAll(dir)
+				}
+			})
 	}
 }
 
 func BenchmarkSync(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		dir, src, dst, err := files(128*MB, 128*MB, 0.1)
+		dir, src, dst, err := randomFiles(MB, MB, 0.3, 0.1)
 		if err != nil {
 			b.Fatal(err)
 		}
 		defer os.RemoveAll(dir)
 		b.StartTimer()
 		p := NewProgress(ioutil.Discard)
+		defer b.Logf("%+v", p)
+		err = Sync(src, dst, p)
 		err = Sync(src, dst, p)
 		b.StopTimer()
 		if err != nil {
@@ -94,67 +84,102 @@ func BenchmarkSync(b *testing.B) {
 	}
 }
 
-func files(size1, size2 int, changes float32) (string, string, string, error) {
-	temp, err := ioutil.TempDir("", "minsync_")
+func randomFiles(ssize, dsize int64, zeros, changes float32) (string, string, string, error) {
+
+	rand.Seed(time.Now().UnixNano())
+
+	dir, err := ioutil.TempDir("", "minsync_")
 	if err != nil {
 		return "", "", "", err
 	}
 
-	data := randomBytes(size1)
-
-	src := path.Join(temp, "src")
-	err = ioutil.WriteFile(src, data, os.ModePerm)
+	sname := path.Join(dir, "src")
+	src, err := os.Create(sname)
+	if err != nil {
+		return "", "", "", err
+	}
+	src.Truncate(ssize)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	if size1 <= size2 {
-		rest := randomBytes(size2 - size1)
-		data = append(data, rest...)
-	} else {
-		data = data[:size2]
+	dname := path.Join(dir, "dst")
+	dst, err := os.Create(dname)
+	if err != nil {
+		return "", "", "", err
 	}
-
-	count := int(changes * float32(len(data)) / float32(BLOCK_SIZE))
-	for i := 0; i < count; i++ {
-		index := rand.Intn(len(data))
-		data[index] = byte(-data[index])
-	}
-
-	dst := path.Join(temp, "dst")
-	err = ioutil.WriteFile(dst, data, os.ModePerm)
+	dst.Truncate(dsize)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	return temp, src, dst, err
-}
+	b := make([]byte, BLOCK_SIZE)
 
-func randomBytes(size int) []byte {
-	b := make([]byte, size)
-	for i := 0; i < size; i++ {
-		b[i] = byte(rand.Intn(256) - 128)
+	for offset := int64(0); offset < ssize || offset < dsize; offset += BLOCK_SIZE {
+
+		if rand.Float32() < zeros {
+			for i := range b {
+				b[i] = 0
+			}
+		} else {
+			rand.Read(b)
+		}
+
+		if offset < ssize {
+			n := ssize - offset
+			if n > int64(len(b)) {
+				n = int64(len(b))
+			}
+			_, err = src.WriteAt(b[:n], offset)
+			if err != nil {
+				return "", "", "", err
+			}
+		}
+
+		if offset < dsize {
+			n := dsize - offset
+			if n > int64(len(b)) {
+				n = int64(len(b))
+			}
+			if rand.Float32() < changes {
+				i := rand.Intn(int(n))
+				b[i] = byte(rand.Intn(256) - 128)
+			}
+			_, err = dst.WriteAt(b[:n], offset)
+			if err != nil {
+				return "", "", "", err
+			}
+		}
+
 	}
-	return b
+
+	return dir, sname, dname, err
+
 }
 
 func compareFiles(n1, n2 string) (bool, error) {
+
 	f1, err := os.Open(n1)
 	if err != nil {
 		return false, err
 	}
 	defer f1.Close()
+
 	f2, err := os.Open(n2)
 	if err != nil {
 		return false, err
 	}
 	defer f2.Close()
+
 	return compareContents(f1, f2)
+
 }
 
 func compareContents(r1, r2 io.Reader) (bool, error) {
+
 	b1 := make([]byte, BLOCK_SIZE)
 	b2 := make([]byte, BLOCK_SIZE)
+
 	for {
 		n1, err1 := r1.Read(b1)
 		n2, err2 := r2.Read(b2)
@@ -174,4 +199,5 @@ func compareContents(r1, r2 io.Reader) (bool, error) {
 			return false, err2
 		}
 	}
+
 }

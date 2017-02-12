@@ -7,6 +7,6 @@ import (
 	"syscall"
 )
 
-func PunchHole(file *os.File, offset, length int64) error {
+func ReadAhead(file *os.File, offset, length int64) error {
 	return syscall.EOPNOTSUPP
 }

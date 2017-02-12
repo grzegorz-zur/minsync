@@ -27,159 +27,98 @@ func main() {
 
 }
 
-type Op struct {
-	Data   []byte
-	Offset int64
-}
+func Sync(source, destination string, progress *Progress) error {
 
-func Sync(src, dst string, p *Progress) error {
-
-	sf, err := os.Open(src)
+	src, err := os.Open(source)
 	if err != nil {
 		return err
 	}
-	defer sf.Close()
+	defer src.Close()
 
-	df, err := os.OpenFile(dst, os.O_RDWR, 0)
+	dst, err := os.OpenFile(destination, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
-	defer df.Close()
+	defer dst.Close()
 
-	si, err := sf.Stat()
+	stat, err := src.Stat()
 	if err != nil {
 		return err
 	}
-	size := si.Size()
-	blocks := size / BLOCK_SIZE
-	if size%BLOCK_SIZE > 0 {
-		blocks += 1
-	}
+	size := stat.Size()
 
-	err = df.Truncate(size)
+	err = dst.Truncate(size)
 	if err != nil {
 		return err
 	}
 
-	sr := make(chan Op, BUFFER_SIZE)
-	sw := make(chan Op, BUFFER_SIZE)
-	se := make(chan error)
+	err = ReadAhead(src, 0, size)
+	if err != nil && err != syscall.EOPNOTSUPP {
+		return err
+	}
+	err = ReadAhead(dst, 0, size)
+	if err != nil && err != syscall.EOPNOTSUPP {
+		return err
+	}
 
-	dr := make(chan Op, BUFFER_SIZE)
-	dw := make(chan Op, BUFFER_SIZE)
-	de := make(chan error)
+	defer progress.End()
+	progress.Start(size)
 
-	go ReadWrite(sf, sr, sw, se)
-	go ReadWrite(df, dr, dw, de)
+	s := make([]byte, BLOCK_SIZE)
+	d := make([]byte, BLOCK_SIZE)
+	z := make([]byte, BLOCK_SIZE)
 
-	defer p.End()
-	p.Start(size, sr, dr, dw)
-	writes := int64(0)
+	sparse := true
 
-loop:
-	for reads := int64(1); reads <= blocks; reads++ {
-		var s, d Op
+	for offset := int64(0); offset < size; {
 
-		select {
-		case s = <-sr:
-		case err = <-se:
-			break loop
+		n, err := src.Read(s)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		_, err = dst.Read(d)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		progress.Read(n)
+
+		if !bytes.Equal(s[:n], d[:n]) {
+
+			zero := sparse && bytes.Equal(s[:n], z[:n])
+			zerofailure := false
+
+			if zero {
+				err = PunchHole(dst, offset, int64(n))
+				switch err {
+				case nil:
+					progress.Zeroed(n)
+				case syscall.EOPNOTSUPP:
+					zerofailure = true
+					sparse = false
+				default:
+					return err
+				}
+			}
+
+			if !zero || zerofailure {
+				_, err = dst.WriteAt(s[:n], offset)
+				if err != nil {
+					return err
+				}
+				progress.Written(n)
+			}
+
 		}
 
-		select {
-		case d = <-dr:
-		case err = <-de:
-			break loop
-		}
+		offset += int64(n)
 
-		if !bytes.Equal(s.Data, d.Data) {
-			dw <- Op{s.Data, s.Offset}
-			writes++
-		}
-
-		p.Step(reads*BLOCK_SIZE, writes*BLOCK_SIZE)
 	}
 
-	close(sw)
-	close(dw)
-
-	<-sr
-	<-dr
-
-	if err != nil {
-		return err
-	}
-
-	select {
-	case err = <-se:
-	case err = <-de:
-	default:
-	}
-	if err != nil {
-		return err
-	}
-
-	err = df.Sync()
+	err = dst.Sync()
 	if err != nil {
 		return err
 	}
 
 	return nil
-
-}
-
-func ReadWrite(file *os.File, read, write chan Op, errs chan error) {
-
-	defer close(read)
-
-	sparse := true
-
-	for offset := int64(0); ; {
-		select {
-		case w, ok := <-write:
-			if !ok {
-				return
-			}
-			if sparse && Zeros(w.Data) {
-				err := PunchHole(file, w.Offset, int64(len(w.Data)))
-				if err == syscall.EOPNOTSUPP {
-					sparse = false
-					_, err = file.WriteAt(w.Data, w.Offset)
-				}
-				if err != nil {
-					errs <- err
-					return
-				}
-			} else {
-				_, err := file.WriteAt(w.Data, w.Offset)
-				if err != nil {
-					errs <- err
-					return
-				}
-			}
-		default:
-			data := make([]byte, BLOCK_SIZE)
-			n, err := file.Read(data)
-			if err != nil && err != io.EOF {
-				errs <- err
-				return
-			}
-			if n != 0 {
-				read <- Op{data[:n], offset}
-				offset += int64(n)
-			}
-		}
-	}
-
-}
-
-func Zeros(data []byte) bool {
-
-	for _, b := range data {
-		if b != 0 {
-			return false
-		}
-	}
-	return true
 
 }
