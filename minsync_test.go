@@ -98,7 +98,7 @@ func randomFiles(ssize, dsize int64, zeros, changes float32) (string, string, st
 	if err != nil {
 		return "", "", "", err
 	}
-	src.Truncate(ssize)
+	err = src.Truncate(ssize)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -108,7 +108,7 @@ func randomFiles(ssize, dsize int64, zeros, changes float32) (string, string, st
 	if err != nil {
 		return "", "", "", err
 	}
-	dst.Truncate(dsize)
+	err = dst.Truncate(dsize)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -143,7 +143,7 @@ func randomFiles(ssize, dsize int64, zeros, changes float32) (string, string, st
 			}
 			if rand.Float32() < changes {
 				i := rand.Intn(int(n))
-				b[i] = byte(rand.Intn(256) - 128)
+				b[i] += 1
 			}
 			_, err = dst.WriteAt(b[:n], offset)
 			if err != nil {

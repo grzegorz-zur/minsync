@@ -11,6 +11,24 @@ import (
 
 func TestSparse(t *testing.T) {
 
+	sparse, err := ioutil.TempFile("", "sparse_")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(sparse.Name())
+	err = sparse.Truncate(KB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fi, err := sparse.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := fi.Sys().(*syscall.Stat_t).Blocks
+	if blocks > 0 {
+		t.Skip("sparse files not supported")
+	}
+
 	dir, src, dst, err := randomFiles(MB, MB, 1, 1)
 	t.Log(dir)
 	if err != nil {
@@ -30,12 +48,11 @@ func TestSparse(t *testing.T) {
 	if !match {
 		t.Errorf("%s != %s", src, dst)
 	}
-	fi, err := os.Stat(dst)
+	fi, err = os.Stat(dst)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stat := fi.Sys().(*syscall.Stat_t)
-	blocks := stat.Blocks
+	blocks = fi.Sys().(*syscall.Stat_t).Blocks
 	if blocks > 0 {
 		t.Errorf("file is not sparse %s blocks %d", dst, blocks)
 	}
