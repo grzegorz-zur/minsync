@@ -37,8 +37,7 @@ func TestSync(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(
-			fmt.Sprintf("case %s %s %s %s", Size(c.src), Size(c.dst),
-				Percentage(int(c.zeros*100)), Percentage(int(c.changes*100))),
+			fmt.Sprintf("case %d %d %.2f %.2f", c.src, c.dst, c.zeros, c.changes),
 			func(t *testing.T) {
 				dir, src, dst, err := randomFiles(c.src, c.dst, c.zeros, c.changes)
 				t.Log("directory", dir)
@@ -63,9 +62,11 @@ func TestSync(t *testing.T) {
 				}
 			})
 	}
+
 }
 
 func BenchmarkSync(b *testing.B) {
+
 	for i := 0; i < b.N; i++ {
 		dir, src, dst, err := randomFiles(MB, MB, 0.3, 0.1)
 		if err != nil {
@@ -74,14 +75,13 @@ func BenchmarkSync(b *testing.B) {
 		defer os.RemoveAll(dir)
 		b.StartTimer()
 		p := NewProgress(ioutil.Discard)
-		defer b.Logf("%+v", p)
-		err = Sync(src, dst, p)
 		err = Sync(src, dst, p)
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
+
 }
 
 func randomFiles(ssize, dsize int64, zeros, changes float32) (string, string, string, error) {

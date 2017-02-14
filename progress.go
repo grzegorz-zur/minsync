@@ -69,13 +69,6 @@ func (p *Progress) Run() {
 	}
 }
 
-func (p *Progress) Changes() int {
-	if p.read == 0 {
-		return 0
-	}
-	return int(100 * (p.written + p.zeroed) / p.read)
-}
-
 func (p *Progress) Speed() int64 {
 	s := int64(time.Since(p.start).Seconds())
 	if s == 0 {
@@ -93,10 +86,10 @@ func (p *Progress) Estimated() time.Duration {
 }
 
 func (p *Progress) Print() {
-	defer p.mutex.Unlock()
 	p.mutex.Lock()
+	defer p.mutex.Unlock()
 	if p.printed {
-		fmt.Fprintf(p.output, "\x1B[12A")
+		fmt.Fprintf(p.output, "\x1B[10A")
 	}
 	fmt.Fprintf(p.output, "\x1B[J")
 	fmt.Fprintf(p.output, "size             %s\n", Size(p.size))
@@ -107,9 +100,7 @@ func (p *Progress) Print() {
 	fmt.Fprintf(p.output, "\n")
 	fmt.Fprintf(p.output, "speed            %s\n", Speed(p.Speed()))
 	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "changes             %s\n", Percentage(p.Changes()))
-	fmt.Fprintf(p.output, "\n")
-	fmt.Fprintf(p.output, "time elapsed          %s\n", Duration(time.Since(p.start)))
-	fmt.Fprintf(p.output, "time left             %s\n", Duration(p.Estimated()))
+	fmt.Fprintf(p.output, "time elapsed    %8s\n", Duration(time.Since(p.start)))
+	fmt.Fprintf(p.output, "time left       %8s\n", Duration(p.Estimated()))
 	p.printed = true
 }

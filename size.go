@@ -29,10 +29,6 @@ func Speed(n int64) string {
 	return Size(n) + "/s"
 }
 
-func Percentage(n int) string {
-	return fmt.Sprintf("%3d%%", n)
-}
-
 func Duration(d time.Duration) string {
 	return time.Duration(int64(time.Second) * int64(d.Seconds())).String()
 }

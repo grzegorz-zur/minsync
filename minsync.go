@@ -82,32 +82,28 @@ func Sync(source, destination string, progress *Progress) error {
 		}
 		progress.Read(n)
 
-		if !bytes.Equal(s[:n], d[:n]) {
+		zero := sparse && bytes.Equal(s[:n], z[:n])
+		zerofailure := false
 
-			zero := sparse && bytes.Equal(s[:n], z[:n])
-			zerofailure := false
-
-			if zero {
-				err = PunchHole(dst, offset, int64(n))
-				switch err {
-				case nil:
-					progress.Zeroed(n)
-				case syscall.EOPNOTSUPP:
-					zerofailure = true
-					sparse = false
-				default:
-					return err
-				}
+		if zero {
+			err = PunchHole(dst, offset, int64(n))
+			switch err {
+			case nil:
+				progress.Zeroed(n)
+			case syscall.EOPNOTSUPP:
+				zerofailure = true
+				sparse = false
+			default:
+				return err
 			}
+		}
 
-			if !zero || zerofailure {
-				_, err = dst.WriteAt(s[:n], offset)
-				if err != nil {
-					return err
-				}
-				progress.Written(n)
+		if !zero && !bytes.Equal(s[:n], d[:n]) || zerofailure {
+			_, err = dst.WriteAt(s[:n], offset)
+			if err != nil {
+				return err
 			}
-
+			progress.Written(n)
 		}
 
 		offset += int64(n)
