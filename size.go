@@ -15,13 +15,13 @@ const (
 func Size(n int64) string {
 	switch {
 	case n >= GB:
-		return fmt.Sprintf("%6.2fGB", float64(n)/float64(GB))
+		return fmt.Sprintf("%.2fGB", float64(n)/float64(GB))
 	case n >= MB:
-		return fmt.Sprintf("%6dMB", n/MB)
+		return fmt.Sprintf("%dMB", n/MB)
 	case n >= KB:
-		return fmt.Sprintf("%6dKB", n/KB)
+		return fmt.Sprintf("%dKB", n/KB)
 	default:
-		return fmt.Sprintf("%6dB", n)
+		return fmt.Sprintf("%dB", n)
 	}
 }
 
