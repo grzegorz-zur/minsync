@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"syscall"
 )
@@ -33,13 +34,23 @@ func Sync(source, destination string, progress *Progress) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() {
+		err := src.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	dst, err := os.OpenFile(destination, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
+	defer func() {
+		err := dst.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	stat, err := src.Stat()
 	if err != nil {
