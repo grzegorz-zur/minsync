@@ -6,20 +6,20 @@ import (
 )
 
 const (
-	KB         = 1024
-	MB         = 1024 * KB
-	GB         = 1024 * MB
-	BLOCK_SIZE = 4 * KB
+	KiB        = 1024
+	MiB        = 1024 * KiB
+	GiB        = 1024 * MiB
+	BLOCK_SIZE = 4 * KiB
 )
 
 func Size(n int64) string {
 	switch {
-	case n >= GB:
-		return fmt.Sprintf("%.2fGB", float64(n)/float64(GB))
-	case n >= MB:
-		return fmt.Sprintf("%dMB", n/MB)
-	case n >= KB:
-		return fmt.Sprintf("%dKB", n/KB)
+	case n >= GiB:
+		return fmt.Sprintf("%.2fGiB", float64(n)/float64(GiB))
+	case n >= MiB:
+		return fmt.Sprintf("%dMiB", n/MiB)
+	case n >= KiB:
+		return fmt.Sprintf("%dKiB", n/KiB)
 	default:
 		return fmt.Sprintf("%dB", n)
 	}

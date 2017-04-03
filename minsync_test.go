@@ -22,7 +22,7 @@ func TestSync(t *testing.T) {
 	}
 	var cases []testCase
 
-	sizes := []int64{0, KB, KB + BLOCK_SIZE, MB, MB + KB, MB + BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE + 1}
+	sizes := []int64{0, KiB, KiB + BLOCK_SIZE, MiB, MiB + KiB, MiB + BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE + 1}
 	probs := []float32{0, 0.33, 0.5, 0.66, 0.9, 1}
 
 	for _, s1 := range sizes {
@@ -68,7 +68,7 @@ func TestSync(t *testing.T) {
 func BenchmarkSync(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
-		dir, src, dst, err := randomFiles(MB, MB, 0.3, 0.1)
+		dir, src, dst, err := randomFiles(MiB, MiB, 0.3, 0.1)
 		if err != nil {
 			b.Fatal(err)
 		}

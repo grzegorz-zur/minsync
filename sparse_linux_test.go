@@ -16,7 +16,7 @@ func TestSparse(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(sparse.Name())
-	err = sparse.Truncate(KB)
+	err = sparse.Truncate(KiB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestSparse(t *testing.T) {
 		t.Skip("sparse files not supported")
 	}
 
-	dir, src, dst, err := randomFiles(MB, MB, 1, 1)
+	dir, src, dst, err := randomFiles(MiB, MiB, 1, 1)
 	t.Log(dir)
 	if err != nil {
 		t.Fatal(err)
