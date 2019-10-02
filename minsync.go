@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"log"
 	"os"
-	"syscall"
 )
 
 func main() {
@@ -64,11 +64,11 @@ func Sync(source, destination string, progress *Progress) error {
 	}
 
 	err = ReadAhead(src, 0, size)
-	if err != nil && err != syscall.EOPNOTSUPP {
+	if err != nil && err != unix.EOPNOTSUPP {
 		return err
 	}
 	err = ReadAhead(dst, 0, size)
-	if err != nil && err != syscall.EOPNOTSUPP {
+	if err != nil && err != unix.EOPNOTSUPP {
 		return err
 	}
 
@@ -101,7 +101,7 @@ func Sync(source, destination string, progress *Progress) error {
 			switch err {
 			case nil:
 				progress.Zeroed(n)
-			case syscall.EOPNOTSUPP:
+			case unix.EOPNOTSUPP:
 				zerofailure = true
 				sparse = false
 			default:

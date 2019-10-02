@@ -3,10 +3,10 @@
 package main
 
 import (
+	"golang.org/x/sys/unix"
 	"os"
-	"syscall"
 )
 
 func ReadAhead(file *os.File, offset, length int64) error {
-	return syscall.EOPNOTSUPP
+	return unix.EOPNOTSUPP
 }
